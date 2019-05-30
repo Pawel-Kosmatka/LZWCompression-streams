@@ -15,11 +15,12 @@ namespace LZWCompression
             var compressedPath = AppDomain.CurrentDomain.BaseDirectory + "compressed.txt";
             var decompressedPath = AppDomain.CurrentDomain.BaseDirectory + "decompressed.txt";
 
-            var entry = File.OpenRead(entryPath);
+            Compress(entryPath, compressedPath);
+            Decompress(compressedPath, decompressedPath);
 
         }
 
-        public static List<int> Compress(string source)
+        public static void Compress(string entryPath, string compressedPath)
         {
             var dictionary = new Dictionary<string, int>();
             for (byte i = 0; i < byte.MaxValue; i++)
@@ -27,11 +28,16 @@ namespace LZWCompression
                 dictionary.Add(((char)i).ToString(), i);
             }
 
-            var c = string.Empty;
-            var result = new List<int>();
+            var source = new StreamReader(entryPath, Encoding.UTF8);
 
-            foreach (var s in source)
+            var c = ((char)source.Read()).ToString();
+            char s;
+            var result = new FileStream(compressedPath, FileMode.OpenOrCreate, FileAccess.Write);
+            //var result = new StreamWriter(compressedPath, false, Encoding.UTF8);
+            var x = BitConverter.GetBytes(dictionary[c]);
+            while (!source.EndOfStream)
             {
+                s = (char)source.Read();
                 string cs = c + s;
                 if (dictionary.ContainsKey(cs))
                 {
@@ -39,7 +45,8 @@ namespace LZWCompression
                 }
                 else
                 {
-                    result.Add(dictionary[c]);
+                    result.Write(BitConverter.GetBytes(dictionary[c]), 0, 4);
+                    //result.Write(dictionary[c] + ",");
                     dictionary.Add(cs, dictionary.Count);
                     c = s.ToString();
                 }
@@ -47,13 +54,14 @@ namespace LZWCompression
 
             if (!string.IsNullOrEmpty(c))
             {
-                result.Add(dictionary[c]);
+                //result.Write(dictionary[c] + ",");
             }
 
-            return result;
+            source.Dispose();
+            result.Dispose();
         }
 
-        public static string Decompress(List<int> source)
+        public static void Decompress(string compressedPath, string decompressedPath)
         {
             var dictionary = new Dictionary<int, string>();
             for (byte i = 0; i < byte.MaxValue; i++)
@@ -61,28 +69,46 @@ namespace LZWCompression
                 dictionary.Add(i, ((char)i).ToString());
             }
 
-            var fc = source[0];
-            source.RemoveAt(0);
+            var source = new StreamReader(compressedPath, Encoding.UTF8);
 
-            var result = dictionary[fc];
+            var fc = getCode();
 
-            foreach (var c in source)
+            var result = new StreamWriter(decompressedPath, false, Encoding.UTF8);
+            result.Write(dictionary[fc]);
+
+            while (!source.EndOfStream)
             {
+                var c = getCode();
                 var pc = dictionary[fc];
                 if (dictionary.ContainsKey(c))
                 {
                     dictionary.Add(dictionary.Count, pc + dictionary[c][0]);
-                    result += dictionary[c];
+                    result.Write(dictionary[c]);
                 }
                 else
                 {
                     dictionary.Add(dictionary.Count, pc + pc[0]);
-                    result += pc + pc[0];
+                    result.Write(pc + pc[0]);
                 }
 
                 fc = c;
+
             }
-            return result.ToString();
+            source.Dispose();
+            result.Dispose();
+
+            int getCode()
+            {
+                var entry = source.Read();
+                string code = string.Empty;
+                while ((char)entry != ',')
+                {
+                    code += (char)entry;
+                    entry = source.Read();
+                }
+                return int.Parse(code);
+            }
         }
+
     }
 }
